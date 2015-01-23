@@ -1,59 +1,62 @@
-import Prelude hiding (all)
-import Data.Foldable (all)
 import qualified Data.List as L
 import qualified Data.Map as M
-import qualified Data.Sequence as Seq
 import qualified Data.Set as S
+
+-- This implementation assumes that a passcode is comprised of a
+-- unique sequence of digits. Allowing duplicate digis in a passcode
+-- would break this implementation.
 
 data Rule = Lt Int Int deriving (Show, Eq, Ord)
 
-parseRule :: String -> [Rule]
-parseRule (a:b:c:[]) = [Lt a' b',
-                        Lt a' c',
-                        Lt b' c']
+comparator :: M.Map Int [Int] -> Int -> Int -> Ordering
+comparator m a b
+  | a == b = EQ
+  | a `elem` blt = GT
+  | otherwise = LT
   where
-    a' = read [a] :: Int
-    b' = read [b] :: Int
-    c' = read [c] :: Int
+    blt = M.findWithDefault [] b m
+
+parseRule :: String -> [Rule]
+parseRule [a, b, c] = [Lt a' b',
+                       Lt a' c',
+                       Lt b' c']
+  where
+    a' = read [a]
+    b' = read [b]
+    c' = read [c]
 
 parseRules :: [String] -> S.Set Rule
 parseRules ss = S.fromList $ concatMap parseRule ss
+
+distinctDigits :: [String] -> [Int]
+distinctDigits input = S.toList $ foldl f S.empty input
+  where
+    f set line = foldl g set is
+      where
+        is = map (read . (:[])) line
+        g set i = S.insert i set
+
+lessThanMapping :: S.Set Rule -> M.Map Int [Int]
+lessThanMapping = S.fold f M.empty
+  where
+    f (Lt a b) = M.insertWith (++) a [b]
 
 toDigits :: Int -> [Int]
 toDigits i
   | i < 10 = [i]
   | otherwise = toDigits (i `div` 10) ++ [i `mod` 10]
 
-toDigitMap :: Int -> M.Map Int [Int]
-toDigitMap n = Seq.foldlWithIndex f M.empty (Seq.fromList ds)
-  where
-    ds = toDigits n
-    f m i a = M.insertWith (++) a [i] m
+fromDigits :: [Int] -> Int
+fromDigits is = read . foldl (++) "" $ map show is
 
-satisfiesRule :: M.Map Int [Int] -> Rule -> Bool
-satisfiesRule dm (Lt a b) = any f allPairs
+shortestPasscode :: [String] -> Int
+shortestPasscode input = fromDigits $ L.sortBy (comparator ltm) dds
   where
-    ais = M.findWithDefault [] a dm
-    bis = M.findWithDefault [] b dm
-    allPairs = [(x, y) | x <- ais, y <- bis]
-    f (a, b) = a < b
-
-satisfiesRules :: S.Set Rule -> Int -> Bool
-satisfiesRules rs i = all (satisfiesRule dm) rs
-  where
-    dm = toDigitMap i
-
-shortestPasscode :: S.Set Rule -> Int
-shortestPasscode rs = head $ take 1 $ filter (satisfiesRules rs)
-                      (candidates [1,2,3,6,7,8,9,0])
-
-candidates :: [Int] -> [Int]
-candidates ds = filter f [10000000..]
-  where
-    f n = dsSet `S.difference` S.fromList (toDigits n) == S.fromList []
-    dsSet = S.fromList ds
+    rules = parseRules input
+    dds = distinctDigits input
+    ltm = lessThanMapping rules
 
 main :: IO ()
 main = do
   content <- readFile "input_files/79_keylog.txt"
-  print $ shortestPasscode (parseRules (lines content))
+  print . shortestPasscode $ lines content
