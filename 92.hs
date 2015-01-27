@@ -1,52 +1,32 @@
-import qualified Data.List as L
+import Data.Digits
 import qualified Data.IntSet as S
 
 type HappyNumbers = S.IntSet
 type SadNumbers = S.IntSet
+type Categorization = (HappyNumbers, SadNumbers)
 
 squareDigits :: Int -> [Int]
 squareDigits n = n : squareDigits squareSum
   where
-    squareSum = sum . map (^ 2) $ toDigits n
+    squareSum = sum . map (^ 2) $ digits 10 n
 
-toDigits :: Int -> [Int]
-toDigits n
-  | n < 10 = [n]
-  | otherwise = toDigits (n `div` 10) ++ [n `mod` 10]
-
-fromDigits :: [Int] -> Int
-fromDigits ns = sum $ zipWith f (reverse ns) [0..]
-  where
-    f x y = x * 10 ^ y
-
-multsOfXUnderY :: Int -> Int -> Int -> [Int]
-multsOfXUnderY x y n = takeWhile (<= y) [n * (x ^ z) | z <- [0..]]
-
-allPerms :: Int -> [Int]
-allPerms n = map fromDigits . L.permutations $ toDigits n
-
-categorizeNumber :: Int -> (HappyNumbers, SadNumbers) ->
-                    (HappyNumbers, SadNumbers)
+categorizeNumber :: Int -> Categorization -> Categorization
 categorizeNumber i (happy, sad)
-  | S.size sad + S.size happy == threshold = (happy, sad)
-  | (i `S.member` sad) || (i `S.member` happy) = (happy, sad)
-  | head rest `S.member` sad = (happy, S.union sad (S.fromList numsToAdd))
-  | otherwise = (S.union happy (S.fromList numsToAdd), sad)
+  | (i `S.member` happy) || (i `S.member` sad) = (happy, sad)
+  | head rest `S.member` happy = (S.union happy (S.fromList chain), sad)
+  | otherwise = (happy, S.union sad (S.fromList chain))
   where
-    sds = squareDigits i
-    (chain, rest) = break (\n -> (n `S.member` sad) ||
-                                 (n `S.member` happy)) sds
-    numsToAdd = concatMap allPerms $ concatMap (multsOfXUnderY 10 threshold)
-                chain
+    (chain, rest) = break (\n -> (n `S.member` sad) || (n `S.member` happy))
+                    (squareDigits i)
 
 threshold :: Int
-threshold = 9999999
+threshold = 10000000
 
 solution :: [Int]
-solution = let (happy, sad) = foldr categorizeNumber
-                              (S.fromList [1], S.fromList [89]) [1..threshold]
-           in S.toList sad
+solution = S.toList sad
+  where
+    (happy, sad) = foldr categorizeNumber (S.fromList [1], S.fromList [89])
+                   [1..(threshold - 1)]
 
 main :: IO ()
-main = do
-  print $ length solution
+main = print $ length solution
